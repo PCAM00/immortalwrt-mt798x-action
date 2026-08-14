@@ -11,6 +11,7 @@ on:
         options:
           - 'cetron-ct3003'
           - 'cmcc-a10'
+          - 'oem_wifi6_sx_7981r120c'
           - 'cmcc-rax3000m-emmc'
           - 'cmcc-rax3000m-nand'
           - 'cmcc-rax3000me-nand'
