@@ -99,22 +99,21 @@
 		led-4g {
 			label = "green:4g";
 			gpios = <&pio 4 GPIO_ACTIVE_LOW>;
-			/* 原厂丝印 oem:green:4g_ok → 蜂窝模组在线灯（不是 WiFi 频段灯） */
+			/* 蜂窝模组在线灯（不是 WiFi 频段灯） */
 		};
 
 		led-5g {
 			label = "green:5g";
 			gpios = <&pio 5 GPIO_ACTIVE_LOW>;
-			/* 原厂丝印 oem:green:wifi_5g → 5G 频段。
-			 * 注意：本固件用闭源 mt_wifi，内核里没有 phy*tpt 触发器，
-			 * 所以不在 DTS 里绑触发器，改由 01_leds 用 netdev 绑到 rax0。
+			/* 5G 灯：闭源 mt_wifi 没有 phy*tpt 触发器，
+			 * 改由 01_leds 用 netdev 绑到 rax0
 			 */
 		};
 
 		led-wifi {
 			label = "green:wifi";
 			gpios = <&pio 6 GPIO_ACTIVE_LOW>;
-			/* 原厂丝印 oem:green:wifi → 2.4G 频段，同上由 01_leds 绑 ra0 */
+			/* 2.4G 灯：同上，绑 ra0 */
 		};
 
 		led-wan {
@@ -367,10 +366,7 @@
 	ext-devices-prefix = "usb", "wwan", "rmnet", "eth2", "eth3", "eth4";
 };
 
-/* 注：下面这两个 nvmem 绑定是给开源 mt76 用的；本固件用的是闭源 mt_wifi，
- * 它不读 DTS 的 nvmem cell，而是读文件 /lib/firmware/e2p（见
- * /etc/wireless/l1profile.dat 的 INDEX0_EEPROM_offset/size）。
- * 镜像里自带的 e2p 是通用模板（MAC 34:ca:81:...），所以板级支持里加了
- * lib/preinit/90_extract_caldata 的分支，把本机 factory 分区前 0x5000 字节
- * 提取成 /lib/firmware/e2p。
+/* 注：这两个 nvmem 绑定是给开源 mt76 用的；本固件用闭源 mt_wifi，
+ * 它读的是文件 /lib/firmware/e2p，由 lib/preinit/90_extract_caldata
+ * 从本机 factory 分区提取（0x5000 字节）。
  */
