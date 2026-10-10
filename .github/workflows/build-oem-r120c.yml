@@ -42,14 +42,14 @@ jobs:
       - name: Clone source (PCAM00/immortalwrt-mt798x-6.6)
         run: |
           git clone --depth 1 -b openwrt-24.10-6.6 \
-            https://github.com/PCAM00/immortalwrt-mt798x-6.6 openwrt
-          cd openwrt
+            https://github.com/PCAM00/immortalwrt-mt798x-6.6 immortalwrt
+          cd immortalwrt
           echo "source HEAD: $(git rev-parse HEAD)"
           git log -1 --oneline
 
       - name: Apply board support
         run: |
-          cd openwrt
+          cd immortalwrt
           cp ../board-support/dts/mt7981b-wifi6-sx-7981r120c.dts target/linux/mediatek/dts/
           cp ../board-support/board.d/01_leds      target/linux/mediatek/filogic/base-files/etc/board.d/01_leds
           cp ../board-support/board.d/02_network   target/linux/mediatek/filogic/base-files/etc/board.d/02_network
@@ -58,7 +58,7 @@ jobs:
 
       - name: Configure (device + packages)
         run: |
-          cd openwrt
+          cd immortalwrt
           cp ../board-support/seed.config .config
           make defconfig
           echo "=== 机型检查 ==="
@@ -67,21 +67,21 @@ jobs:
           echo "已启用软件包: $(grep -c '^CONFIG_PACKAGE_.*=y' .config) 个"
 
       - name: Download source tarballs
-        run: cd openwrt && make -j$(nproc) download
+        run: cd immortalwrt && make -j$(nproc) download
 
       - name: Build firmware
-        run: cd openwrt && make -j$(nproc)
+        run: cd immortalwrt && make -j$(nproc)
 
       - name: Show output
-        run: ls -lh openwrt/bin/targets/mediatek/filogic/ | head -40
+        run: ls -lh immortalwrt/bin/targets/mediatek/filogic/ | head -40
 
       - name: Upload firmware
         uses: actions/upload-artifact@v4
         with:
           name: oem_wifi6_sx_7981r120c-firmware
           path: |
-            openwrt/bin/targets/mediatek/filogic/*sysupgrade.bin
-            openwrt/bin/targets/mediatek/filogic/sha256sums
-            openwrt/bin/targets/mediatek/filogic/*.manifest
+            immortalwrt/bin/targets/mediatek/filogic/*sysupgrade.bin
+            immortalwrt/bin/targets/mediatek/filogic/sha256sums
+            immortalwrt/bin/targets/mediatek/filogic/*.manifest
           if-no-files-found: error
           retention-days: 30
