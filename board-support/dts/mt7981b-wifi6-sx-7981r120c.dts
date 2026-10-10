@@ -1,0 +1,342 @@
+// SPDX-License-Identifier: GPL-2.0-or-later OR MIT
+
+/dts-v1/;
+#include <dt-bindings/gpio/gpio.h>
+#include <dt-bindings/input/input.h>
+#include <dt-bindings/leds/common.h>
+#include <dt-bindings/pinctrl/mt65xx.h>
+
+#include "mt7981.dtsi"
+
+/ {
+	model = "WIFI6-SX-7981R120C";
+	compatible = "oem,wifi6-sx-7981r120c", "mediatek,mt7981";
+
+	aliases {
+		serial0 = &uart0;
+		led-boot = &led_status;
+		led-failsafe = &led_status;
+		led-running = &led_status;
+		led-upgrade = &led_status;
+		label-mac-device = &gmac0;
+	};
+
+	chosen {
+		stdout-path = "serial0:115200n1";
+		bootargs = "console=ttyS0,115200n1 loglevel=8 earlycon=uart8250,mmio32,0x11002000";
+	};
+
+	memory@40000000 {
+		device_type = "memory";
+		/* 512 MiB DDR：若 U-Boot 自检打印的是 256 MiB，这里改成 0x10000000 */
+		reg = <0 0x40000000 0 0x20000000>;
+	};
+
+	gpio-keys {
+		compatible = "gpio-keys";
+
+		reset {
+			label = "reset";
+			linux,code = <KEY_RESTART>;
+			gpios = <&pio 1 GPIO_ACTIVE_LOW>;
+		};
+
+		wps {
+			label = "wps";
+			linux,code = <KEY_WPS_BUTTON>;
+			/* 原厂 kernel dt 里这个键是 GPIO_ACTIVE_HIGH；
+			 * 若 WPS 键一直显示按下/或完全无反应，改成 GPIO_ACTIVE_HIGH 试试
+			 */
+			gpios = <&pio 0 GPIO_ACTIVE_LOW>;
+		};
+	};
+
+	/* 原厂 gpio-export 定义，电平与极性照抄原厂 dt，避免改了之后
+	 * 4G 模组/外设上电行为跟原固件不一致。不需要的可以删掉。
+	 */
+	gpio-export {
+		compatible = "gpio-export";
+
+		modem {
+			gpio-export,name = "4g";
+			gpio-export,output = <1>;
+			gpios = <&pio 11 GPIO_ACTIVE_LOW>;
+		};
+
+		gpio9 {
+			gpio-export,name = "gpio9";
+			gpio-export,output = <1>;
+			gpios = <&pio 9 GPIO_ACTIVE_LOW>;
+		};
+
+		gpio10 {
+			gpio-export,name = "gpio10";
+			gpio-export,output = <1>;
+			gpios = <&pio 10 GPIO_ACTIVE_LOW>;
+		};
+
+		gpio23 {
+			gpio-export,name = "gpio23";
+			gpio-export,output = <0>;
+			gpios = <&pio 23 GPIO_ACTIVE_HIGH>;
+		};
+
+		gpio24 {
+			gpio-export,name = "gpio24";
+			gpio-export,output = <0>;
+			gpios = <&pio 24 GPIO_ACTIVE_HIGH>;
+		};
+	};
+
+	leds {
+		compatible = "gpio-leds";
+
+		led_status: status {
+			label = "green:status";
+			gpios = <&pio 13 GPIO_ACTIVE_LOW>;
+		};
+
+		led-4g {
+			label = "green:4g";
+			gpios = <&pio 4 GPIO_ACTIVE_LOW>;
+		};
+
+		led-5g {
+			label = "green:5g";
+			gpios = <&pio 5 GPIO_ACTIVE_LOW>;
+			/* 5G：对应 phy1tpt（若实测两个灯对调，交换 phy0/phy1 即可） */
+			linux,default-trigger = "phy1tpt";
+		};
+
+		led-wifi {
+			label = "green:wifi";
+			gpios = <&pio 6 GPIO_ACTIVE_LOW>;
+			/* 2.4G：等 mac80211 注册 phy0tpt 后由 LED 核心自动挂上 */
+			linux,default-trigger = "phy0tpt";
+		};
+
+		led-wan {
+			label = "green:wan";
+			gpios = <&pio 7 GPIO_ACTIVE_LOW>;
+		};
+	};
+};
+
+&eth {
+	status = "okay";
+
+	gmac0: mac@0 {
+		compatible = "mediatek,eth-mac";
+		reg = <0>;
+		phy-mode = "2500base-x";
+
+		/* MAC 取 factory 分区偏移 4（原厂标签 MAC）。
+		 * 若发现和机身标签不一致，把 0 改成 (-2) 或 1 试试。
+		 */
+		nvmem-cell-names = "mac-address";
+		nvmem-cells = <&macaddr_factory_4 0>;
+
+		fixed-link {
+			speed = <2500>;
+			full-duplex;
+			pause;
+		};
+	};
+
+	gmac1: mac@1 {
+		compatible = "mediatek,eth-mac";
+		reg = <1>;
+		phy-mode = "gmii";
+		phy-handle = <&int_gbe_phy>;
+
+		nvmem-cell-names = "mac-address";
+		nvmem-cells = <&macaddr_factory_4 1>;
+	};
+};
+
+&mdio_bus {
+	switch: switch@1f {
+		compatible = "mediatek,mt7531";
+		reg = <31>;
+
+		reset-gpios = <&pio 39 GPIO_ACTIVE_HIGH>;
+
+		interrupt-controller;
+		#interrupt-cells = <1>;
+		interrupt-parent = <&pio>;
+		interrupts = <38 IRQ_TYPE_LEVEL_HIGH>;
+	};
+};
+
+&switch {
+	ports {
+		#address-cells = <1>;
+		#size-cells = <0>;
+
+		port@0 {
+			reg = <0>;
+			label = "lan1";
+		};
+
+		port@1 {
+			reg = <1>;
+			label = "lan2";
+		};
+
+		port@2 {
+			reg = <2>;
+			label = "lan3";
+		};
+
+		port@3 {
+			reg = <3>;
+			label = "lan4";
+		};
+
+		port@6 {
+			reg = <6>;
+			ethernet = <&gmac0>;
+			phy-mode = "2500base-x";
+
+			fixed-link {
+				speed = <2500>;
+				full-duplex;
+				pause;
+			};
+		};
+	};
+};
+
+&spi0 {
+	pinctrl-names = "default";
+	pinctrl-0 = <&spi0_flash_pins>;
+	status = "okay";
+
+	spi_nand: flash@0 {
+		compatible = "spi-nand";
+		reg = <0>;
+
+		spi-max-frequency = <52000000>;
+		spi-rx-bus-width = <4>;
+		spi-tx-bus-width = <4>;
+
+		/* U-Boot 用 NMBM 管理坏块，内核必须用同一套 */
+		mediatek,nmbm;
+		mediatek,bmt-max-ratio = <1>;
+		/* 必须与 BL2(ATF)/U-Boot 的 NMBM 保留块数一致（本框架默认 256）；
+		 * 写 64 会让内核与 bootloader 对可用容量/管理区的计算不一致
+		 */
+		mediatek,bmt-max-reserved-blocks = <256>;
+
+		/* SPI-NAND 读时序校准：读 0 地址的 "SPINAND" 特征数据，
+		 * 由 SPI 核心自动扫出最佳 tick_dly（缺这段则用默认值，
+		 * 参考板（cudy/wr3000-nand、xiaomi 等）都带这几行）
+		 */
+		spi-cal-enable;
+		spi-cal-mode = "read-data";
+		spi-cal-datalen = <7>;
+		spi-cal-data = /bits/ 8 <0x53 0x50 0x49 0x4E 0x41 0x4E 0x44>;
+		spi-cal-addrlen = <5>;
+		spi-cal-addr = /bits/ 32 <0x0 0x0 0x0 0x0 0x0>;
+
+		partitions: partitions {
+			compatible = "fixed-partitions";
+			#address-cells = <1>;
+			#size-cells = <1>;
+
+			partition@0 {
+				label = "bl2";
+				reg = <0x00000000 0x00100000>;
+				read-only;
+			};
+
+			partition@100000 {
+				label = "u-boot-env";
+				reg = <0x00100000 0x00080000>;
+			};
+
+			factory: partition@180000 {
+				label = "factory";
+				reg = <0x00180000 0x00200000>;
+				read-only;
+
+				nvmem-layout {
+					compatible = "fixed-layout";
+					#address-cells = <1>;
+					#size-cells = <1>;
+
+					eeprom_factory_0: eeprom@0 {
+						reg = <0x0 0x1000>;
+					};
+
+					macaddr_factory_4: macaddr@4 {
+						compatible = "mac-base";
+						reg = <0x4 0x6>;
+						#nvmem-cell-cells = <1>;
+					};
+				};
+			};
+
+			partition@380000 {
+				label = "fip";
+				reg = <0x00380000 0x00100000>;
+				read-only;
+			};
+
+			/* 0x480000 + 0xE600000 = 235520k，与 U-Boot 的
+			 * mtdparts "nmbm0:1024k(bl2),512k(u-boot-env),
+			 * 2048k(factory),1024k(fip),235520k(ubi)" 完全一致
+			 */
+			partition@480000 {
+				label = "ubi";
+				compatible = "linux,ubi";
+				reg = <0x00480000 0x0e600000>;
+			};
+		};
+	};
+};
+
+&pio {
+	spi0_flash_pins: spi0-pins {
+		mux {
+			function = "spi";
+			groups = "spi0", "spi0_wp_hold";
+		};
+
+		conf-pu {
+			pins = "SPI0_CS", "SPI0_HOLD", "SPI0_WP";
+			drive-strength = <MTK_DRIVE_8mA>;
+			bias-pull-up = <MTK_PUPD_SET_R1R0_11>;
+		};
+
+		conf-pd {
+			pins = "SPI0_CLK", "SPI0_MOSI", "SPI0_MISO";
+			drive-strength = <MTK_DRIVE_8mA>;
+			bias-pull-down = <MTK_PUPD_SET_R1R0_11>;
+		};
+	};
+};
+
+&uart0 {
+	status = "okay";
+};
+
+&watchdog {
+	status = "okay";
+};
+
+&xhci {
+	status = "okay";
+};
+
+&usb_phy {
+	status = "okay";
+};
+
+&wifi {
+	status = "okay";
+	nvmem-cells = <&eeprom_factory_0>;
+	nvmem-cell-names = "eeprom";
+	/* 与上面 nvmem 指向同一份数据；6.6 树的 mt76 两种来源都支持 */
+	mediatek,mtd-eeprom = <&factory 0x0>;
+};
