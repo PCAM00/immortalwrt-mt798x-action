@@ -28,12 +28,14 @@ jobs:
           large-packages: true
           swap-storage: true
 
-      - name: Install build dependencies
+      - name: Install build dependencies + LLVM toolchain
         run: |
           sudo apt-get update -qq
-          sudo apt-get install -y -qq build-essential clang flex bison g++ gawk \
+          sudo apt-get install -y -qq build-essential clang llvm lld flex bison g++ gawk \
             gcc-multilib g++-multilib gettext git libncurses-dev libssl-dev \
-            rsync swig unzip zstd zip file wget
+            rsync swig unzip zstd zip file wget python3 python3-setuptools
+          echo "clang: $(clang --version | head -1)"
+          echo "llvm-objcopy: $(llvm-objcopy --version 2>/dev/null | head -1)"
 
       - name: Show environment
         run: |
@@ -54,23 +56,39 @@ jobs:
           cp ../board-support/board.d/01_leds      target/linux/mediatek/filogic/base-files/etc/board.d/01_leds
           cp ../board-support/board.d/02_network   target/linux/mediatek/filogic/base-files/etc/board.d/02_network
           cp ../board-support/filogic.mk           target/linux/mediatek/image/filogic.mk
-          echo "filogic.mk 里的机型条目数: $(grep -c oem_wifi6_sx_7981r120c target/linux/mediatek/image/filogic.mk)"
+          echo "filogic.mk 机型条目: $(grep -c oem_wifi6_sx_7981r120c target/linux/mediatek/image/filogic.mk)"
 
       - name: Configure (device + packages)
         run: |
           cd immortalwrt
           cp ../board-support/seed.config .config
           make defconfig
-          echo "=== 机型检查 ==="
-          grep -E 'CONFIG_TARGET_mediatek_filogic_DEVICE_oem_wifi6_sx_7981r120c=y' .config \
-            || { echo "❌ 机型未选中"; exit 1; }
+          echo "=== 关键符号检查 ==="
+          fail=0
+          for s in 'CONFIG_TARGET.*DEVICE_oem_wifi6_sx_7981r120c=y' \
+                   'CONFIG_MTK_CONNINFRA_APSOC_MT7981=y' 'CONFIG_PACKAGE_kmod-conninfra=y' \
+                   'CONFIG_PACKAGE_kmod-mt_wifi=y'; do
+            if grep -qE "^$s" .config; then echo "  OK   $s"; else echo "  MISS $s"; fail=1; fi
+          done
           echo "已启用软件包: $(grep -c '^CONFIG_PACKAGE_.*=y' .config) 个"
+          exit $fail
 
       - name: Download source tarballs
         run: cd immortalwrt && make -j$(nproc) download
 
       - name: Build firmware
         run: cd immortalwrt && make -j$(nproc)
+
+      - name: Dump package build logs (on failure)
+        if: failure()
+        run: |
+          set +e
+          echo "===== 失败的包构建日志 ====="
+          find immortalwrt/logs -name 'compile.txt' -size +0c 2>/dev/null | head -8 | while read f; do
+            echo "########## $f"; tail -60 "$f"
+          done
+          echo "===== 最近 90 分钟内的日志文件 ====="
+          find immortalwrt/logs -name '*.txt' -mmin -90 2>/dev/null | head -25
 
       - name: Show output
         run: ls -lh immortalwrt/bin/targets/mediatek/filogic/ | head -40
