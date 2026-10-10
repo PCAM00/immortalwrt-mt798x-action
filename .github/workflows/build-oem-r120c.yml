@@ -59,6 +59,16 @@ jobs:
           echo "DTS &hnat           : $(grep -c 'ext-devices-prefix' target/linux/mediatek/dts/mt7981b-wifi6-sx-7981r120c.dts)"
           echo "01_leds 灯条目      : $(grep -c 'ucidef_set_led' target/linux/mediatek/filogic/base-files/etc/board.d/01_leds)"
 
+      - name: Setup feeds (关键：缺了这步 feeds/luci/luci.mk 不存在，package/install 必失败)
+        run: |
+          cd immortalwrt
+          ./scripts/feeds update -a
+          ./scripts/feeds install -a
+          echo "=== feeds 检查 ==="
+          ls feeds/ 2>/dev/null | tr '\n' ' '; echo
+          ls -la feeds/luci/luci.mk 2>/dev/null || { echo "❌ feeds/luci/luci.mk 仍不存在"; exit 1; }
+          echo "luci feed 包数: $(ls package/feeds/luci 2>/dev/null | wc -l)"
+
       - name: Configure (device + packages)
         run: |
           cd immortalwrt
