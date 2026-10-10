@@ -1,0 +1,87 @@
+name: Build oem_wifi6_sx_7981r120c
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - ci/oem-r120c
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build ImmortalWrt for oem_wifi6_sx_7981r120c
+    runs-on: ubuntu-22.04
+    timeout-minutes: 355
+    steps:
+      - name: Checkout build repo
+        uses: actions/checkout@v4
+
+      - name: Free disk space
+        uses: jlumbroso/free-disk-space@main
+        with:
+          tool-cache: false
+          android: true
+          dotnet: true
+          haskell: true
+          large-packages: true
+          swap-storage: true
+
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq build-essential clang flex bison g++ gawk \
+            gcc-multilib g++-multilib gettext git libncurses-dev libssl-dev \
+            rsync swig unzip zstd zip file wget
+
+      - name: Show environment
+        run: |
+          echo "CPU: $(nproc) cores"; free -h | head -2; df -h / | tail -1
+
+      - name: Clone source (PCAM00/immortalwrt-mt798x-6.6)
+        run: |
+          git clone --depth 1 -b openwrt-24.10-6.6 \
+            https://github.com/PCAM00/immortalwrt-mt798x-6.6 openwrt
+          cd openwrt
+          echo "source HEAD: $(git rev-parse HEAD)"
+          git log -1 --oneline
+
+      - name: Apply board support
+        run: |
+          cd openwrt
+          cp ../board-support/dts/mt7981b-wifi6-sx-7981r120c.dts target/linux/mediatek/dts/
+          cp ../board-support/board.d/01_leds      target/linux/mediatek/filogic/base-files/etc/board.d/01_leds
+          cp ../board-support/board.d/02_network   target/linux/mediatek/filogic/base-files/etc/board.d/02_network
+          cp ../board-support/filogic.mk           target/linux/mediatek/image/filogic.mk
+          echo "filogic.mk 里的机型条目数: $(grep -c oem_wifi6_sx_7981r120c target/linux/mediatek/image/filogic.mk)"
+
+      - name: Configure (device + packages)
+        run: |
+          cd openwrt
+          cp ../board-support/seed.config .config
+          make defconfig
+          echo "=== 机型检查 ==="
+          grep -E 'CONFIG_TARGET_mediatek_filogic_DEVICE_oem_wifi6_sx_7981r120c=y' .config \
+            || { echo "❌ 机型未选中"; exit 1; }
+          echo "已启用软件包: $(grep -c '^CONFIG_PACKAGE_.*=y' .config) 个"
+
+      - name: Download source tarballs
+        run: cd openwrt && make -j$(nproc) download
+
+      - name: Build firmware
+        run: cd openwrt && make -j$(nproc)
+
+      - name: Show output
+        run: ls -lh openwrt/bin/targets/mediatek/filogic/ | head -40
+
+      - name: Upload firmware
+        uses: actions/upload-artifact@v4
+        with:
+          name: oem_wifi6_sx_7981r120c-firmware
+          path: |
+            openwrt/bin/targets/mediatek/filogic/*sysupgrade.bin
+            openwrt/bin/targets/mediatek/filogic/sha256sums
+            openwrt/bin/targets/mediatek/filogic/*.manifest
+          if-no-files-found: error
+          retention-days: 30
