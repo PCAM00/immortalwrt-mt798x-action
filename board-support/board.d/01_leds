@@ -227,6 +227,10 @@ zyxel,ex5601-t0-ubootmod)
 	;;
 	oem,wifi6-sx-7981r120c)
 		ucidef_set_led_netdev "wan" "WAN" "green:wan" "eth1" "link tx rx"
+		ucidef_set_led_netdev "wifi2g" "WiFi 2.4G" "green:wifi" "ra0" "link tx rx"
+		ucidef_set_led_netdev "wifi5g" "WiFi 5G" "green:5g" "rax0" "link tx rx"
+		ucidef_set_led_netdev "4g" "4G" "green:4g" "eth2" "link tx rx"
+		ucidef_set_led_default "status" "Status" "green:status" "1"
 		;;
 esac
 

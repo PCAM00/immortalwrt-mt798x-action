@@ -1,0 +1,49 @@
+. /lib/functions/caldata.sh
+. /lib/functions/system.sh
+
+caldata_validate() {
+	local macprefix
+
+	[ -e "/lib/firmware/$FIRMWARE" ] || return 1
+
+	macprefix=$(hexdump -v -n 2 -s 4 -e '1/1 "%02x:" "%02x"' "/lib/firmware/$FIRMWARE" 2>"/dev/null")
+	if [ "$macprefix" = "00:0c" ] || [ -z "$macprefix" ]; then
+		return 1
+	else
+		return 0
+	fi
+}
+
+do_extract_caldata() {
+	case $(board_name) in
+	cmcc,xr30-emmc |\
+	cmcc,rax3000m-emmc-mtk)
+		FIRMWARE=MT7981_iPAiLNA_EEPROM.bin
+		caldata_validate && exit 0
+		caldata_extract_mmc "factory" 0x0 0x1000
+		;;
+	glinet,gl-mt6000|\
+	jdcloud,re-cp-03)
+		FIRMWARE=MT7986_ePAeLNA_EEPROM_AX6000.bin
+		caldata_validate && exit 0
+		caldata_extract_mmc "factory" 0x0 0x1000
+		;;
+		oem,wifi6-sx-7981r120c)
+		# 闭源 mt_wifi 驱动读的是 /lib/firmware/e2p（见 /etc/wireless/l1profile.dat：
+		# INDEX0_EEPROM_offset=0x0、INDEX0_EEPROM_size=0x5000）。镜像里自带的是
+		# 通用模板 e2p（MAC 34:ca:81:...），必须用本机 factory 分区覆盖，否则驱动报
+		# phy_freq_adjust failed / DAT cck_timeout Fail，且功率校准不是本机的。
+		FIRMWARE=e2p
+		mtd=$(find_mtd_chardev "factory")
+		if [ -n "$mtd" ]; then
+			if [ "$(hexdump -v -n 2 -e '1/1 "%02x"' $mtd)" = "8179" ]; then
+				caldata_dd "$mtd" "/lib/firmware/e2p" 0x5000 0x0
+			else
+				echo "caldata: factory eeprom header unexpected, skip extraction"
+			fi
+		fi
+		;;
+esac
+}
+
+boot_hook_add preinit_main do_extract_caldata
