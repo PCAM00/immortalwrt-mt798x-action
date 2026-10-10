@@ -77,15 +77,29 @@ jobs:
         run: cd immortalwrt && make -j$(nproc) download
 
       - name: Build firmware
-        run: cd immortalwrt && make -j$(nproc)
+        run: |
+          cd immortalwrt
+          if ! make -j$(nproc); then
+            echo "################ 构建失败：V=s 重跑安装阶段定位 ################"
+            make -j1 V=s package/install 2>&1 | tail -180 || true
+            echo "################ logs 目录 ################"
+            ls -la logs 2>/dev/null | head -20
+            find logs -type f 2>/dev/null | head -20
+            echo "################ 磁盘 ################"
+            df -h /
+            exit 1
+          fi
 
-      - name: Dump package build logs (on failure)
+      - name: Dump build logs (on failure)
         if: failure()
         run: |
           set +e
-          find immortalwrt/logs -name 'compile.txt' -size +0c 2>/dev/null | head -8 | while read f; do
-            echo "########## $f"; tail -60 "$f"
+          echo "=== logs 目录 ==="; ls -la immortalwrt/logs 2>/dev/null | head -20
+          for f in $(find immortalwrt/logs -type f -size +0c 2>/dev/null | head -10); do
+            echo "########## $f"; tail -50 "$f"
           done
+          echo "=== 磁盘 ==="; df -h /
+          echo "=== build_dir 占用前 10 ==="; du -sh immortalwrt/build_dir/target-*/ 2>/dev/null; du -sh immortalwrt/build_dir/* 2>/dev/null | sort -hr | head -10
 
       - name: Show output
         run: ls -lh immortalwrt/bin/targets/mediatek/filogic/ | head -40
